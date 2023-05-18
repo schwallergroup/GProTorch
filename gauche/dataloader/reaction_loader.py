@@ -1,6 +1,6 @@
 import pandas as pd
 
-from gauche.data_featuriser import one_hot, rxnfp, drfp, bag_of_characters
+from gauche.data_featuriser import one_hot, rxnfp, rxnfp2, drfp, bag_of_characters
 from gauche.dataloader import DataLoader
 
 
@@ -42,6 +42,7 @@ class ReactionLoader(DataLoader):
         valid_representations = [
             "ohe",
             "rxnfp",
+            "rxnfp2"
             "drfp",
             "bag_of_smiles",
         ]
@@ -51,6 +52,9 @@ class ReactionLoader(DataLoader):
 
         elif representation == "rxnfp":
             self.features = rxnfp(self.features.to_list())
+
+        elif representation == "rxnfp2":
+            self.features = rxnfp2(self.features.to_list())
 
         elif representation == "drfp":
             self.features = drfp(self.features.to_list(), nBits=nBits)

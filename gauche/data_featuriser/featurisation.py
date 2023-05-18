@@ -1,6 +1,11 @@
+import os
+from pathlib import Path
+
 import numpy as np
+import torch
 from rdkit.Chem import MolFromSmiles, AllChem, Descriptors
 import pandas as pd
+from rxnfp.tokenization import SmilesTokenizer
 from rxnfp.transformer_fingerprints import (
     get_default_model_and_tokenizer,
     RXNBERTFingerprintGenerator,
@@ -13,6 +18,9 @@ from rdkit.Chem import rdMolDescriptors
 
 
 # Reactions
+from transformers import AutoModelWithLMHead, AutoTokenizer, BertModel
+
+
 def one_hot(df):
     """
     Builds reaction representation as a bit vector which indicates whether
@@ -43,6 +51,26 @@ def rxnfp(reaction_smiles):
     rxnfps = [rxnfp_generator.convert(smile) for smile in reaction_smiles]
     return np.array(rxnfps, dtype=np.float64)
 
+def rxnfp2(reaction_smiles):
+    print(os.getcwd())
+    model_path = '../rxn_yields/trained_models/uspto/uspto_milligram_smooth_random_test_epochs_2_pretrained/checkpoint-30204-epoch-2/'
+    tokenizer_vocab_path = '../rxn_yields/trained_models/uspto/uspto_milligram_smooth_random_test_epochs_2_pretrained/checkpoint-30204-epoch-2/vocab.txt'
+
+
+    device = torch.device("cuda" if (torch.cuda.is_available()) else "cpu")
+
+    model = BertModel.from_pretrained(model_path)
+    model = model.eval()
+    model.to(device)
+
+    tokenizer = SmilesTokenizer(
+        tokenizer_vocab_path
+    )
+
+    rxnfp_generator = RXNBERTFingerprintGenerator(model, tokenizer)
+    rxnfps = [rxnfp_generator.convert(smile) for smile in reaction_smiles]
+    return np.array(rxnfps, dtype=np.float64)
+
 
 def drfp(reaction_smiles, nBits=2048):
     """
@@ -55,7 +83,7 @@ def drfp(reaction_smiles, nBits=2048):
 
     """
     fps = DrfpEncoder.encode(reaction_smiles, n_folded_length=nBits)
-    return np.asarray(fps, dtype=np.float64)
+    return np.array(fps, dtype=np.float64)
 
 
 # Molecules
@@ -109,14 +137,64 @@ def graphs(smiles, graphein_config=None):
 def mqn_features(smiles):
     """
     Builds molecular representation as a vector of Molecular Quantum Numbers.
-
     :param reaction_smiles: list of molecular smiles
     :type reaction_smiles: list
     :return: array of mqn featurised molecules
-
     """
     molecules = [MolFromSmiles(smile) for smile in smiles]
     mqn_descriptors = [
         rdMolDescriptors.MQNs_(molecule) for molecule in molecules
     ]
     return np.asarray(mqn_descriptors)
+
+
+def chemberta_features(smiles):
+    # any model weights from the link above will work here
+    model = AutoModelWithLMHead.from_pretrained(
+        "seyonec/ChemBERTa-zinc-base-v1"
+    )
+    tokenizer = AutoTokenizer.from_pretrained("seyonec/ChemBERTa-zinc-base-v1")
+    tokenized_smiles = [
+        tokenizer(smile, return_tensors="pt") for smile in smiles
+    ]
+    outputs = [
+        model(
+            input_ids=tokenized_smile["input_ids"],
+            attention_mask=tokenized_smile["attention_mask"],
+            output_hidden_states=True,
+        )
+        for tokenized_smile in tokenized_smiles
+    ]
+    embeddings = torch.cat(
+        [output["hidden_states"][0].sum(axis=1) for output in outputs], axis=0
+    )
+    return embeddings.detach().numpy()
+
+
+def cddd(smiles):
+    current_path = os.getcwd()
+    os.chdir(Path(os.path.abspath(__file__)).parent)
+    cddd = pd.read_csv('precalculated_featurisation/cddd_additives_descriptors.csv')
+    cddd_array = np.zeros((cddd.shape[0], 512))
+    for i, smile in enumerate(smiles):
+        row = cddd[cddd['smiles'] == smile][cddd.columns[3:]].values
+        cddd_array[i] = row
+    os.chdir(current_path)
+    return cddd_array
+
+
+def xtb(smiles):
+    current_path = os.getcwd()
+    os.chdir(Path(os.path.abspath(__file__)).parent)
+    xtb = pd.read_csv('precalculated_featurisation/xtb_qm_descriptors_2.csv')
+    xtb_array = np.zeros((xtb.shape[0], len(xtb.columns[:-2])))
+    for i, smile in enumerate(smiles):
+        row = xtb[xtb['Additive_Smiles'] == smile][xtb.columns[:-2]].values
+        xtb_array[i] = row
+    os.chdir(current_path)
+    return xtb_array
+
+
+def random_features():
+    # todo random continous random bit vector
+    pass

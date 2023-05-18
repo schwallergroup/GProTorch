@@ -2,16 +2,17 @@
 Instantiation of the abstract data loader class for
 molecular property prediction datasets.
 """
-
-
 import numpy as np
 import pandas as pd
 from gauche.data_featuriser.featurisation import (
     fingerprints,
     fragments,
-    mqn_features,
-    bag_of_characters,
+    chemberta_features,
     graphs,
+    bag_of_characters,
+    mqn_features,
+    xtb,
+    cddd
 )
 
 from gauche.dataloader import DataLoader
@@ -88,10 +89,20 @@ class DataLoaderMP(DataLoader):
             "fingerprints",
             "fragments",
             "fragprints",
-            "graphs",
             "bag_of_smiles",
             "bag_of_selfies",
+            "chemberta",
+            "graphs",
+            "chemprints",
             "mqn",
+            "cddd",
+            "xtb",
+            "cddd+xtb",
+            "mqn+xtb",
+            "cddd+xtb+mqn",
+            "fingerprints+xtb",
+            "fragprints+xtb"
+
         ]
 
         if representation == "fingerprints":
@@ -115,9 +126,73 @@ class DataLoaderMP(DataLoader):
                 ),
                 axis=1,
             )
+        elif representation == "chemprints":
+            self.features = np.concatenate(
+                (
+                    chemberta_features(self.features),
+                    fingerprints(
+                        self.features, bond_radius=bond_radius, nBits=nBits
+                    ),
 
+                ),
+                axis=1,
+            )
         elif representation == "mqn":
             self.features = mqn_features(self.features)
+
+        elif representation == "cddd":
+            self.features = cddd(self.features)
+
+        elif representation == "xtb":
+            self.features = xtb(self.features)
+
+        elif representation == "cddd+xtb":
+            self.features = np.concatenate(
+                (
+                    cddd(self.features),
+                    xtb(self.features),
+                ),
+                axis=1,
+            )
+        
+        elif representation == "cddd+xtb+mqn":
+            self.features = np.concatenate(
+                (
+                    cddd(self.features),
+                    xtb(self.features),
+                    mqn_features(self.features),
+
+                ),
+                axis=1,
+            )       
+
+        elif representation == 'mqn+xtb':
+            self.features = np.concatenate(
+                (
+                    mqn_features(self.features),
+                    xtb(self.features),
+                ),
+                axis=1,
+            )
+
+        elif representation == "fingerprints+xtb":
+            self.features = np.concatenate(
+                (
+                    fingerprints(self.features, bond_radius=bond_radius, nBits=nBits),
+                    xtb(self.features),
+                ),
+                axis=1,
+            )
+
+        elif representation == "fragprints+xtb":
+            self.features = np.concatenate(
+                (
+                    fingerprints(self.features, bond_radius=bond_radius, nBits=nBits),
+                    fragments(self.features),
+                    xtb(self.features),
+                ),
+                axis=1,
+            )
 
         elif representation == "bag_of_selfies":
 
@@ -126,6 +201,31 @@ class DataLoaderMP(DataLoader):
         elif representation == "bag_of_smiles":
 
             self.features = bag_of_characters(self.features)
+
+        elif representation == "chemberta":
+            self.features = chemberta_features(self.features)
+
+        elif representation == "chemberta+xtb":
+
+            self.features = np.concatenate(
+                (
+                    chemberta_features(self.features),
+                    xtb(self.features),
+                ),
+                axis=1,
+            )
+
+        elif representation == "chemberta+xtb+mqn":
+
+            self.features = np.concatenate(
+                (
+                    chemberta_features(self.features),
+                    xtb(self.features),
+                    mqn_features(self.features),
+
+                ),
+                axis=1,
+            )
 
         elif representation == "graphs":
             self.features = graphs(self.features, graphein_config)
@@ -201,4 +301,3 @@ class DataLoaderMP(DataLoader):
 if __name__ == "__main__":
     loader = DataLoaderMP()
     loader.load_benchmark("ESOL", "../../data/property_prediction/ESOL.csv")
-    print(loader)
